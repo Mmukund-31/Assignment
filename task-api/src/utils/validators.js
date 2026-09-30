@@ -3,6 +3,11 @@ const VALID_PRIORITIES = ['low', 'medium', 'high'];
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
 
+const isPlainObject = (value) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const INVALID_BODY_ERROR = 'request body must be a JSON object';
+
 // Enum fields are checked whenever they are present, not just when truthy,
 // so values like "" or null can't slip past validation (BUGS.md #6).
 const validateOptionalFields = (body) => {
@@ -18,7 +23,10 @@ const validateOptionalFields = (body) => {
   return null;
 };
 
+// Every validator first checks the body is an object so that `null`, arrays and
+// primitives produce a controlled 400 instead of a TypeError (BUGS.md #9).
 const validateCreateTask = (body) => {
+  if (!isPlainObject(body)) return INVALID_BODY_ERROR;
   if (!isNonEmptyString(body.title)) {
     return 'title is required and must be a non-empty string';
   }
@@ -26,6 +34,7 @@ const validateCreateTask = (body) => {
 };
 
 const validateUpdateTask = (body) => {
+  if (!isPlainObject(body)) return INVALID_BODY_ERROR;
   if (body.title !== undefined && !isNonEmptyString(body.title)) {
     return 'title must be a non-empty string';
   }
@@ -33,6 +42,7 @@ const validateUpdateTask = (body) => {
 };
 
 const validateAssignTask = (body) => {
+  if (!isPlainObject(body)) return INVALID_BODY_ERROR;
   if (!isNonEmptyString(body.assignee)) {
     return 'assignee is required and must be a non-empty string';
   }

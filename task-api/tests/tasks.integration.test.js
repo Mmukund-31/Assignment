@@ -19,6 +19,13 @@ beforeEach(() => {
 
 const titles = (res) => res.body.map((t) => t.title);
 
+// Valid JSON that is not an object. `null`, strings and numbers are rejected by
+// express.json() itself; arrays reach the validators. Both must end in a 400.
+const malformedBodies = ['null', '[]', '"hello"', '123'];
+
+const sendRaw = (method, url, rawBody) =>
+  request(app)[method](url).set('Content-Type', 'application/json').send(rawBody);
+
 describe('GET /tasks', () => {
   it('returns all tasks with the expected shape', async () => {
     const res = await request(app).get('/tasks');
@@ -96,8 +103,15 @@ describe('GET /tasks?page=&limit=', () => {
     ['page=-1&limit=2', ['Task 1', 'Task 2']],
     ['page=0&limit=2', ['Task 1', 'Task 2']],
     ['page=abc&limit=2', ['Task 1', 'Task 2']],
+    ['page=undefined&limit=2', ['Task 1', 'Task 2']],
+    ['page=2abc&limit=2', ['Task 1', 'Task 2']],
+    ['page=2.5&limit=2', ['Task 1', 'Task 2']],
+    ['page=&limit=2', ['Task 1', 'Task 2']],
     ['page=1&limit=-2', ['Task 1', 'Task 2', 'Task 3', 'Task 4', 'Task 5']],
+    ['page=1&limit=-1', ['Task 1', 'Task 2', 'Task 3', 'Task 4', 'Task 5']],
     ['page=1&limit=0', ['Task 1', 'Task 2', 'Task 3', 'Task 4', 'Task 5']],
+    ['page=1&limit=10abc', ['Task 1', 'Task 2', 'Task 3', 'Task 4', 'Task 5']],
+    ['page=1&limit=1.5', ['Task 1', 'Task 2', 'Task 3', 'Task 4', 'Task 5']],
   ])('falls back to defaults for invalid values (%s)', async (query, expected) => {
     const res = await request(app).get(`/tasks?${query}`);
     expect(res.status).toBe(200);
@@ -178,9 +192,12 @@ describe('POST /tasks', () => {
     expect(list.body).toHaveLength(5);
   });
 
-  it('returns 400 when the body is not a JSON object', async () => {
-    const res = await request(app).post('/tasks').send(['not', 'an', 'object']);
+  it.each(malformedBodies)('returns 400 without crashing for body %s', async (rawBody) => {
+    const res = await sendRaw('post', '/tasks', rawBody);
+
     expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: expect.any(String) });
+    expect(taskService.getAll()).toHaveLength(5);
   });
 });
 
@@ -207,6 +224,14 @@ describe('PUT /tasks/:id', () => {
     ['invalid dueDate', { dueDate: 'soon' }],
   ])('returns 400 for %s and leaves the task unchanged', async (_, body) => {
     const res = await request(app).put(`/tasks/${tasks[0].id}`).send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: expect.any(String) });
+    expect(taskService.findById(tasks[0].id)).toEqual(tasks[0]);
+  });
+
+  it.each(malformedBodies)('returns 400 without crashing for body %s', async (rawBody) => {
+    const res = await sendRaw('put', `/tasks/${tasks[0].id}`, rawBody);
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: expect.any(String) });
@@ -314,6 +339,14 @@ describe('PATCH /tasks/:id/assign', () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'assignee is required and must be a non-empty string' });
+    expect(taskService.findById(tasks[0].id)).toEqual(tasks[0]);
+  });
+
+  it.each(malformedBodies)('returns 400 without crashing for body %s', async (rawBody) => {
+    const res = await sendRaw('patch', `/tasks/${tasks[0].id}/assign`, rawBody);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: expect.any(String) });
     expect(taskService.findById(tasks[0].id)).toEqual(tasks[0]);
   });
 

@@ -1,9 +1,13 @@
 # Bug Report — Task Manager API
 
-I found these bugs by writing tests against the documented API contract (README endpoint table + `ASSIGNMENT.md`) and running them against the **unmodified** starter code. Against the original code, **57 of 126 tests failed**. Every failure traced back to one of the bugs below or to the not-yet-implemented `/assign` endpoint. Each bug was also reproduced manually with `curl` against a running server.
+I found these by writing tests against the documented API contract (README endpoint table + `ASSIGNMENT.md`) and running them against the **unmodified** starter code. Against the original code, **57 of 126 tests failed**, and every failure traced back to one of the confirmed defects below or to the not-yet-implemented `/assign` endpoint. A later audit pass found defect #9 (and tightened #8); its new tests fail on the previous code as well. Each defect was also reproduced manually with `curl`.
 
-| # | Bug | Severity | Status |
-|---|-----|----------|--------|
+The report separates **confirmed defects** (behavior that contradicts the contract or the code's own intent; all fixed) from **behavior requiring product clarification** (ambiguous contract; deliberately left unchanged).
+
+## Confirmed defects
+
+| # | Defect | Severity | Status |
+|---|--------|----------|--------|
 | 1 | Pagination skips the first page | High | Fixed |
 | 2 | Status filter matches substrings | Medium | Fixed |
 | 3 | Completing a task resets its priority | Medium | Fixed |
@@ -11,10 +15,17 @@ I found these bugs by writing tests against the documented API contract (README 
 | 5 | Malformed JSON returns 500 instead of 400 | Low | Fixed |
 | 6 | Empty/falsy `status` and `priority` bypass validation | Medium | Fixed |
 | 7 | `?status=` silently disables pagination | Medium | Fixed |
-| 8 | Zero/negative `page`/`limit` produce wrong results | Low | Fixed |
-| 9 | `completedAt` not kept in sync when status changes via `PUT` | Low | Not fixed — recommendation |
-| 10 | Re-completing a task overwrites the original `completedAt` | Low | Not fixed — recommendation |
-| 11 | README documents the wrong status values | Low (docs) | Fixed in README |
+| 8 | Invalid `page`/`limit` values are mishandled | Low | Fixed |
+| 9 | Non-object request bodies crash or bypass validation | Medium | Fixed |
+| 10 | README documents the wrong status values | Low (docs) | Fixed in README |
+
+## Behavior requiring product clarification (not fixed)
+
+| Q | Question |
+|---|----------|
+| A | Should `PATCH /complete` on an already-done task keep the original `completedAt`, or refresh it? |
+| B | Should `PUT` changing `status` to/from `done` set/clear `completedAt`? |
+| C | Is `PUT` a full replace or a partial merge? |
 
 Test names below are the `it(...)` descriptions. Run `npx jest -t "<name>"` to run one.
 
@@ -240,54 +251,95 @@ The two tests above.
 
 ---
 
-## 8. Zero/negative `page` or `limit` produce wrong results
+## 8. Invalid `page` / `limit` values are mishandled
 
 ### Location
 `task-api/src/routes/tasks.js` → `GET /` query parsing
 
 ### Expected behavior
-The existing code shows the intent: `parseInt(page) || 1` and `parseInt(limit) || 10`, so invalid input falls back to the defaults.
+The original code shows the intent: `parseInt(page) || 1` and `parseInt(limit) || 10`, i.e. invalid input falls back to the defaults. Only positive integers are valid page numbers and page sizes.
 
 ### Actual behavior
-`|| 1` only catches `0`/`NaN`. Negative numbers pass through, and `Array.prototype.slice` treats a negative offset as "count from the end". After fix #1, `?page=-1&limit=2` would have returned tasks from the *end* of the list. `limit=-2` returned an empty array.
+`|| 1` only catches `0`/`NaN`. Negative numbers passed through, and `Array.prototype.slice` treats a negative offset as "count from the end", so (after fix #1) `?page=-1&limit=2` returned tasks from the *end* of the list and `limit=-2` returned `[]`. Additionally, `parseInt` accepts trailing garbage: `page=2abc` silently became `2` and `page=2.5` became `2`.
+
+### Reproduction
+```bash
+curl "localhost:3000/tasks?page=-1&limit=2"     # tasks from the end of the list
+curl "localhost:3000/tasks?page=2abc&limit=2"   # treated as page=2
+```
 
 ### Root cause
-Truthiness was used where the code needed a range check.
+Truthiness was used where the code needed a range check, and `parseInt` was used where it needed strict validation.
 
 ### Test demonstrating the bug
-`tests/tasks.integration.test.js` → *falls back to defaults for invalid values (...)* (`page=-1`, `page=0`, `page=abc`, `limit=-2`, `limit=0`)
+`tests/tasks.integration.test.js` → *falls back to defaults for invalid values (...)*: `page=-1`, `0`, `abc`, `undefined`, `2abc`, `2.5`, empty, and `limit=-2`, `-1`, `0`, `10abc`, `1.5`.
 
 ### Fix
-A small `parsePositiveInt(value, fallback)` helper. Anything that isn't a positive integer uses the default. This keeps the original lenient design instead of switching to 400 responses.
+`parsePositiveInt(value, fallback)` uses `Number(value)` and accepts only positive integers; everything else uses the default. This keeps the original lenient fallback design instead of switching to 400 responses.
 
 ### Regression protection
-The parameterised test above.
+The parameterised test above, plus the page 1 / page 2 tests from #1.
 
 ---
 
-## 9. `completedAt` not kept in sync when status changes via `PUT` — *not fixed*
+## 9. Non-object request bodies crash or bypass validation
 
-**Location:** `taskService.update()`.
-**Expected:** When `status` becomes `done`, `completedAt` should be set. When a done task goes back to `todo`/`in_progress`, `completedAt` should be cleared.
-**Actual:** `PUT {"status":"done"}` leaves `completedAt: null`. Reopening a completed task keeps its old `completedAt`, so you get a `todo` task with a completion timestamp.
-**Why not fixed:** This is a product decision. Either `PUT` manages `completedAt` itself, or status changes to/from `done` must go through dedicated endpoints. I'd want to confirm which before changing it.
-**Recommended fix:** In `update()`, derive `completedAt` from the status transition (set it when changing into `done`, null it when changing out of `done`).
+### Location
+`task-api/src/utils/validators.js` → `validateCreateTask()`, `validateUpdateTask()`, `validateAssignTask()`
 
-## 10. Re-completing a task overwrites `completedAt` — *not fixed*
+### Expected behavior
+A body that is not a JSON object (`null`, `[]`, `"hello"`, `123`) gets a controlled `400` with the standard `{ "error": "..." }` shape.
 
-**Location:** `taskService.completeTask()`.
-**Actual:** Calling `PATCH /complete` on a task that's already `done` returns 200 and replaces the original completion timestamp. Currently covered by *keeps an already completed task done* (it asserts the status only).
-**Why not fixed:** Returning 200 is reasonable (the call is idempotent from the client's point of view). Whether the *original* timestamp should be kept, or a 409 returned, is a product question.
-**Recommended fix:** `completedAt: task.completedAt ?? new Date().toISOString()`.
+### Actual behavior
+The validators read properties straight off `body`, so a `null` body would throw `TypeError: Cannot read properties of null` (surfacing as a 500). An array body was worse: `PUT /tasks/:id` with `[]` passed validation and returned **200**, because the empty array has no offending fields.
 
-## 11. README documents the wrong status values — *docs fixed*
+### Reproduction
+```bash
+curl -X PUT localhost:3000/tasks/<id> -H "Content-Type: application/json" -d '[]'   # → 200 before the fix
+```
+(`null`, `"hello"` and `123` bodies are already rejected by `express.json()` in its default strict mode, which returns 400 through the error handler from #5. The validators are the second line of defence and must not depend on that.)
 
-The starter README's task shape said `"status": "pending | in-progress | completed"`, and its sample used `?status=pending`. The code only accepts `todo | in_progress | done`, so following the docs gave a 400 on create or an empty list on filter. I rewrote the README to match the code.
+### Root cause
+The validators assumed `req.body` is always an object.
+
+### Test demonstrating the bug
+- `tests/validators.test.js` → *returns an error for … instead of throwing* (all three validators; `null`, `undefined`, array, string, number)
+- `tests/tasks.integration.test.js` → *returns 400 without crashing for body …* on `POST /tasks`, `PUT /tasks/:id` and `PATCH /tasks/:id/assign` (`null`, `[]`, `"hello"`, `123`)
+
+### Fix
+A small `isPlainObject` helper; every validator first returns `request body must be a JSON object` if the check fails.
+
+### Regression protection
+The tests above; they also assert the task store is unchanged after the rejected request.
 
 ---
 
-## Observations (not classified as bugs)
+## 10. README documents the wrong status values (docs)
 
-- **`PUT` is a partial update.** The starter README calls it a "Full update", but the implementation merges fields (PATCH semantics). I kept the existing behavior and documented it, since changing it would break any client relying on partial updates.
-- **`dueDate` validation accepts any `Date.parse`-able string** (e.g. `"March 5"`), not strictly ISO 8601 as the error message claims. It also accepts `""` because of a truthiness check. Both are low impact, and I've left them as they are.
-- **No `GET /tasks/:id` route**, even though the service has `findById()`.
+The starter README's task shape said `"status": "pending | in-progress | completed"`, and its sample used `?status=pending`. The code only accepts `todo | in_progress | done`, so following the docs produced a 400 on create or an empty list on filter. The README was rewritten to match the code.
+
+---
+
+# Behavior requiring product clarification
+
+These are not classified as defects: the brief doesn't define the intended behavior, so I did not guess. Each is a question to settle before production.
+
+## A. Re-completing a task: preserve or refresh `completedAt`?
+
+`PATCH /tasks/:id/complete` on an already-done task returns 200 and replaces the original `completedAt`. Reasonable answers: keep the first timestamp (`completedAt: task.completedAt ?? new Date().toISOString()`), refresh it, or return 409. Current behavior is left as is; the test only asserts the task stays `done`.
+
+## B. Should `PUT` changing `status` to/from `done` update `completedAt`?
+
+`PUT {"status":"done"}` leaves `completedAt: null`, and reopening a completed task via `PUT` keeps the old `completedAt`. Either `PUT` should derive `completedAt` from the status transition, or status changes to/from `done` should only go through `/complete`. Left unchanged pending a decision.
+
+## C. Is `PUT` a full replace or a partial merge?
+
+The README calls it a "Full update", but the implementation merges the provided fields (PATCH-like semantics). I kept the existing behavior and documented it, since changing it could break clients relying on partial updates.
+
+---
+
+## Production-hardening notes (not defects)
+
+- **`PUT` accepts unknown fields** and stores them on the task. `id` and `createdAt` are protected (#4), but a strict allow-list schema would be better for production.
+- **`dueDate` validation uses `Date.parse`**, so it accepts non-ISO strings such as `"March 5"` (the error message says ISO 8601) and treats `""` as "no date". Low impact; a strict ISO check is a possible improvement.
+- **No `GET /tasks/:id` route**, even though the service has `findById()`. The brief's endpoint list doesn't include one, so none was added.

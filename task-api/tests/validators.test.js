@@ -4,6 +4,23 @@ const {
   validateAssignTask,
 } = require('../src/utils/validators');
 
+describe.each([
+  ['validateCreateTask', validateCreateTask],
+  ['validateUpdateTask', validateUpdateTask],
+  ['validateAssignTask', validateAssignTask],
+])('%s with a non-object body', (_, validate) => {
+  // Regression: BUGS.md #9 — `null` used to throw a TypeError, arrays passed validation.
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['an array', []],
+    ['a string', 'hello'],
+    ['a number', 123],
+  ])('returns an error for %s instead of throwing', (__, body) => {
+    expect(validate(body)).toBe('request body must be a JSON object');
+  });
+});
+
 describe('validateCreateTask', () => {
   it('accepts a minimal valid body', () => {
     expect(validateCreateTask({ title: 'Write tests' })).toBeNull();

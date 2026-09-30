@@ -93,6 +93,7 @@ const assignTask = (id, assignee) => {
   return updated;
 };
 
+// Test-only helper. Not exposed through the HTTP API.
 const _reset = () => {
   tasks = [];
 };

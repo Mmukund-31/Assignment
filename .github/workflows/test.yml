@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: task-api/package-lock.json
+
+      - name: Install dependencies
+        working-directory: task-api
+        run: npm ci
+
+      - name: Run tests
+        working-directory: task-api
+        run: npm test -- --runInBand
+
+      # Also enforces the 80% coverage threshold from jest.config.js.
+      - name: Run coverage
+        working-directory: task-api
+        run: npm run coverage

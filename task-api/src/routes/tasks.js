@@ -7,10 +7,14 @@ const {
   validateAssignTask,
 } = require('../utils/validators');
 
-// Non-numeric, zero and negative values fall back to the default (BUGS.md #8).
+// Only strict positive integers are accepted. Anything else ("2abc", "2.5", "0",
+// "-1", "") falls back to the default; parseInt would have silently read "2abc" as 2
+// (BUGS.md #8).
 const parsePositiveInt = (value, fallback) => {
-  const parsed = parseInt(value, 10);
-  return parsed > 0 ? parsed : fallback;
+  if (value === undefined) return fallback;
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
 router.get('/stats', (req, res) => {

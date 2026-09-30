@@ -1,67 +1,27 @@
-# Task Manager API — The Untested API
+# Take-Home Assignment — Task API
 
-A small Express REST API for managing tasks, with an in-memory data store. This submission adds a full Jest/Supertest test suite, a bug report ([BUGS.md](./BUGS.md)), fixes for the confirmed bugs, and the new `PATCH /tasks/:id/assign` endpoint.
+An Express REST API for managing tasks (in-memory store), with a full Jest/Supertest test suite, a bug report, fixes for the confirmed bugs, and the new `PATCH /tasks/:id/assign` endpoint. The original brief is in [ASSIGNMENT.md](./ASSIGNMENT.md).
 
-The original brief is in [ASSIGNMENT.md](./ASSIGNMENT.md).
+## Submission Links
+
+- **GitHub:** https://github.com/Mmukund-31/Assignment
+- **Live API:** _pending: not deployed yet (see [Deployment](#deployment))_
+- **Health Check:** _pending: `<live-url>/health` once deployed_
+
+## Overview
+
+| Area | Status |
+|------|--------|
+| Unit tests (service + validators) | 81 tests |
+| Integration tests (HTTP, every endpoint) | 74 tests + 4 app-level tests |
+| Coverage | 98.83% statements / 97.67% branches / 97.14% functions / 98.69% lines (threshold: 80%) |
+| Bug report | [BUGS.md](./BUGS.md): 10 confirmed defects (9 code fixes + 1 docs fix), 3 product questions |
+| New endpoint | `PATCH /tasks/:id/assign` |
+| CI | GitHub Actions runs tests + coverage on every push/PR |
 
 ## Tech Stack
 
-- Node.js (18+)
-- Express 4
-- Jest 29 (unit tests + coverage)
-- Supertest (HTTP integration tests)
-- uuid (task IDs)
-
-No new dependencies were added.
-
-## Setup
-
-```bash
-git clone <repository-url>
-cd <project-directory>/task-api
-npm install
-```
-
-## Run
-
-```bash
-npm start            # http://localhost:3000
-PORT=8080 npm start  # custom port
-```
-
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `PORT`   | No       | `3000`  | Port the HTTP server listens on |
-
-There are no other environment variables and no secrets. The data store is in memory and resets whenever the server restarts.
-
-## Test
-
-```bash
-npm test             # run all tests
-npm run test:watch   # re-run on change
-npm run coverage     # run with coverage report (HTML in task-api/coverage/)
-```
-
-`jest.config.js` enforces a global coverage threshold of 80% (the assignment's minimum) for statements, branches, functions and lines.
-
-### Current results
-
-```
-Test Suites: 4 passed, 4 total
-Tests:       126 passed, 126 total
-
-File             | % Stmts | % Branch | % Funcs | % Lines
-All files        |   98.75 |    97.26 |   97.05 |   98.63
- app.js          |   88.23 |     87.5 |   66.66 |   88.23
- routes/tasks.js |     100 |      100 |     100 |     100
- taskService.js  |     100 |    95.23 |     100 |     100
- validators.js   |     100 |      100 |     100 |     100
-```
-
-What's left uncovered, and why:
-- the `app.listen(...)` block in `app.js`. It only runs when the file is started directly, and I verified it manually with `npm start`.
-- one defensive branch in `getStats()` for a task with an unknown status. Validation now makes that state impossible to reach through the API.
+Node.js 18+, Express 4, uuid, Jest 29, Supertest. No dependencies were added to the starter.
 
 ## Project Structure
 
@@ -73,41 +33,87 @@ task-api/
     services/taskService.js # Business logic + in-memory store
     utils/validators.js     # Input validation
   tests/
-    taskService.test.js        # Unit tests: service layer
-    validators.test.js         # Unit tests: validation rules
+    taskService.test.js        # Unit: service layer
+    validators.test.js         # Unit: validation rules
     tasks.integration.test.js  # HTTP tests for every /tasks endpoint
     app.test.js                # /health, error handling
   jest.config.js
   package.json
+.github/workflows/test.yml  # CI
+render.yaml                 # Render deployment blueprint
 BUGS.md                     # Bug report
 ASSIGNMENT.md               # Original brief
 ```
 
+## Setup
+
+```bash
+git clone https://github.com/Mmukund-31/Assignment.git
+cd Assignment/task-api
+npm install
+```
+
+## Running Locally
+
+```bash
+npm start              # http://localhost:3000
+PORT=8080 npm start    # custom port
+```
+
+`PORT` is the only environment variable (optional, default `3000`). There are no secrets, so no `.env` file is needed. Data is held in memory and resets on restart.
+
+## Running Tests
+
+```bash
+npm test               # all tests
+npm run test:watch     # re-run on change
+```
+
+## Coverage
+
+```bash
+npm run coverage       # prints a table; HTML report in task-api/coverage/
+```
+
+`jest.config.js` fails the run if any global metric drops below 80%. Latest run: **4 suites, 159 tests, all passing**.
+
+| File | Statements | Branches | Functions | Lines |
+|------|-----------|----------|-----------|-------|
+| **All files** | **98.83%** | **97.67%** | **97.14%** | **98.69%** |
+| routes/tasks.js | 100% | 100% | 100% | 100% |
+| utils/validators.js | 100% | 100% | 100% | 100% |
+| services/taskService.js | 100% | 95.23% | 100% | 100% |
+| app.js | 88.23% | 87.5% | 66.66% | 88.23% |
+
+Not covered: the `app.listen(...)` block in `app.js` (only runs when started directly; verified manually with `npm start`) and one defensive branch in `getStats()` for a task with an unknown status, which validation makes unreachable through the API.
+
 ## API Endpoints
 
-| Method   | Path                  | Success | Errors | Description |
-|----------|-----------------------|---------|--------|-------------|
-| `GET`    | `/health`             | 200     |        | Liveness check → `{ "status": "ok" }` |
-| `GET`    | `/tasks`              | 200     |        | List tasks. Optional `?status=`, `?page=`, `?limit=` (combinable) |
-| `GET`    | `/tasks/stats`        | 200     |        | `{ todo, in_progress, done, overdue }` |
-| `POST`   | `/tasks`              | 201     | 400    | Create a task |
-| `PUT`    | `/tasks/:id`          | 200     | 400, 404 | Update a task (partial merge; see below) |
-| `DELETE` | `/tasks/:id`          | 204     | 404    | Delete a task |
-| `PATCH`  | `/tasks/:id/complete` | 200     | 404    | Mark a task as done |
-| `PATCH`  | `/tasks/:id/assign`   | 200     | 400, 404 | Assign a task to a person (**new**) |
+All errors use `{ "error": "<message>" }`.
 
-All errors use the shape `{ "error": "<message>" }`. A malformed JSON body returns `400 { "error": "Invalid request body" }`.
+| Method | Path | Purpose | Success | Errors |
+|--------|------|---------|---------|--------|
+| `GET` | `/health` | Liveness check → `{ "status": "ok" }` | 200 | |
+| `GET` | `/tasks` | List tasks. Query: `status`, `page`, `limit` (combinable) | 200 (array) | |
+| `GET` | `/tasks/stats` | `{ todo, in_progress, done, overdue }` | 200 | |
+| `POST` | `/tasks` | Create. Body: `title` (required), optional `description`, `status`, `priority`, `dueDate` | 201 (task) | 400 |
+| `PUT` | `/tasks/:id` | Update given fields (partial merge; `id`/`createdAt` ignored) | 200 (task) | 400, 404 |
+| `DELETE` | `/tasks/:id` | Delete | 204 | 404 |
+| `PATCH` | `/tasks/:id/complete` | Set `status: "done"` and `completedAt`; other fields unchanged | 200 (task) | 404 |
+| `PATCH` | `/tasks/:id/assign` | Set the assignee (see below) | 200 (task) | 400, 404 |
 
-### Task shape
+There is no `GET /tasks/:id` route: the original brief doesn't define one, so none was added.
+
+**Task shape**
 
 ```json
 {
   "id": "uuid",
-  "title": "string (required)",
+  "title": "string",
   "description": "string",
   "status": "todo | in_progress | done",
   "priority": "low | medium | high",
-  "dueDate": "ISO 8601 date string or null",
+  "dueDate": "date string or null",
   "assignee": "string or null",
   "completedAt": "ISO 8601 or null",
   "createdAt": "ISO 8601"
@@ -116,142 +122,106 @@ All errors use the shape `{ "error": "<message>" }`. A malformed JSON body retur
 
 Defaults on create: `status: "todo"`, `priority: "medium"`, `description: ""`, `dueDate: null`, `assignee: null`.
 
-### Query parameters for `GET /tasks`
+**`GET /tasks` query parameters**
 
-- `status`: exact match on `todo`, `in_progress` or `done`. An unknown value returns `[]`.
-- `page`: 1-indexed page number (default `1`).
-- `limit`: page size (default `10`).
-- Pagination is applied when `page` or `limit` is present. Values that aren't positive integers fall back to the defaults. With `status`, pagination applies to the filtered list.
+- `status`: exact match on `todo`, `in_progress` or `done`; unknown values return `[]`.
+- `page` (default `1`, 1-indexed) and `limit` (default `10`): must be positive integers. Anything else (`0`, `-1`, `2abc`, `2.5`, empty) falls back to the default. With `status`, pagination applies to the filtered list.
 
-### Examples
+**Request bodies** must be JSON objects. `null`, arrays, strings and numbers return `400`; malformed JSON returns `400 { "error": "Invalid request body" }`.
+
+## PATCH /tasks/:id/assign
 
 ```bash
-curl -X POST http://localhost:3000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Write tests", "priority": "high"}'
-
-curl "http://localhost:3000/tasks?status=todo&page=1&limit=10"
-
-curl -X PATCH http://localhost:3000/tasks/<id>/complete
-
 curl -X PATCH http://localhost:3000/tasks/<id>/assign \
   -H "Content-Type: application/json" \
   -d '{"assignee": "Mukund"}'
 ```
 
-## New Feature — `PATCH /tasks/:id/assign`
-
-```http
-PATCH /tasks/:id/assign
-Content-Type: application/json
-
-{ "assignee": "Mukund" }
-```
-
 | Case | Response |
 |------|----------|
-| Valid name | `200` with the full updated task |
-| `assignee` missing, `""`, whitespace-only, or not a string (`123`, `null`, `true`, arrays, objects) | `400 { "error": "assignee is required and must be a non-empty string" }` |
-| Task does not exist | `404 { "error": "Task not found" }` |
+| Valid name | `200 OK`, full updated task |
+| `assignee` missing, `""`, whitespace-only, or not a string (`123`, `null`, `true`, array, object); body not an object | `400 Bad Request` |
+| Task does not exist | `404 Not Found` `{ "error": "Task not found" }` |
 
-Design decisions:
-
-- **Validation lives in `validators.js`** (`validateAssignTask`), next to the existing validators, and returns an error string the same way they do. The route follows the same flow as `PUT`: validate → 400, then look up the task → 404, then 200.
-- **Validation runs before the task lookup**, as it does for `PUT`. A bad body sent to an unknown id therefore returns 400, not 404.
-- **Whitespace is rejected and names are trimmed.** `"   "` is treated as empty, and `"  Mukund "` is stored as `"Mukund"`. That way the stored value never has stray whitespace.
-- **Reassignment is allowed.** Assigning an already-assigned task replaces the assignee and returns 200. The brief asks what should happen, and I chose overwriting because it's the least surprising behavior for a single-field update and needs no extra endpoint. If the business wanted "claim" semantics, a 409 for already-assigned tasks would be easy to add.
-- **Every task now has an `assignee` field** (default `null` on create), so clients get a consistent shape instead of a field that appears only after assignment.
-- **Only `assignee` changes.** Status, priority, dates and every other field are left alone, and the tests check this.
-- **No unassign operation.** The brief doesn't ask for one, so empty values are rejected rather than treated as "unassign". A dedicated `DELETE /tasks/:id/assign` would be a cleaner way to add it later.
+- **Reassignment is supported.** Assigning an already-assigned task replaces the assignee (Alice → Bob gives Bob) and returns 200.
+- **Unrelated fields are preserved.** Only `assignee` changes; tests compare the whole task before and after.
+- **Names are trimmed**, so `"  Mukund "` is stored as `"Mukund"`.
 
 ## Bugs Found
 
-I found and documented 11 issues in [BUGS.md](./BUGS.md), each with location, expected vs actual behavior, reproduction steps, root cause, and the test that catches it. In short:
+Full detail (location, expected vs actual, reproduction, root cause, test, fix, regression protection) is in [BUGS.md](./BUGS.md). Confirmed defects:
 
-1. Pagination offset was `page * limit`, so page 1 skipped the first page of results.
-2. The status filter used substring matching (`?status=do` matched `todo` and `done`).
+1. Pagination offset was `page * limit`, so page 1 skipped the first page.
+2. Status filter used substring matching (`?status=do` matched `todo` and `done`).
 3. Completing a task reset its priority to `medium`.
-4. `PUT` could overwrite a task's `id`/`createdAt`, orphaning the task.
+4. `PUT` could overwrite `id`/`createdAt`, orphaning the task.
 5. Malformed JSON returned 500 instead of 400.
-6. `status: ""` / `priority: ""` bypassed validation and were stored.
+6. `status: ""` / `priority: ""` bypassed validation.
 7. `?status=` silently disabled pagination.
-8. Zero or negative `page`/`limit` produced wrong slices.
-9. `completedAt` isn't kept in sync when status changes via `PUT` *(documented, not fixed)*.
-10. Re-completing a task overwrites the original `completedAt` *(documented, not fixed)*.
-11. The starter README documented the wrong status values *(fixed in these docs)*.
+8. Invalid `page`/`limit` mishandled (negative offsets; `parseInt` read `2abc` as `2`).
+9. Non-object bodies (`null`, `[]`, …) crashed or bypassed validation.
+10. The starter README documented status values the code rejects.
 
 ## Bugs Fixed
 
-Bugs **1–8** are fixed. Each fix is a small, targeted change marked with a comment referencing `BUGS.md`, and each has a regression test that failed against the original code.
-
-The headline fixes, and why:
-
-- **Pagination (#1)**: `(page - 1) * limit`. The API is 1-indexed (defaults to `page=1`), so the first page was unreachable.
-- **Exact status filter (#2)**: `===` instead of `.includes()`. Filtering on an enum must not return tasks with other statuses.
-- **Completion keeps priority (#3)**: removed the hard-coded `priority: 'medium'`. Completing a task shouldn't silently change unrelated data.
-
-Bugs 9 and 10 depend on product decisions about how `completedAt` should behave, so I documented them with recommended fixes rather than guessing.
+Defects **1–9 are fixed in code** and #10 in this README. Each fix is a small targeted change, marked with a comment referencing `BUGS.md`, and has a regression test that fails against the previous code. Headline fixes: `(page - 1) * limit` for pagination, `===` for exact status matching, and no longer overwriting `priority` on completion.
 
 ## Testing Strategy
 
-126 tests across 4 suites, run with `npm test`.
+- **Unit tests:** every service function (`getAll`, `findById`, `getByStatus`, `getPaginated`, `getStats`, `create`, `update`, `remove`, `completeTask`, `assignTask`) and every validator rule, called directly.
+- **Integration tests:** every endpoint over HTTP with Supertest, checking status codes, response bodies, the error shape, and side effects (a rejected request must not change state).
+- **Edge cases:** missing/empty/whitespace/wrong-type fields; invalid enums; malformed and non-object bodies; unknown ids; double delete; assigning a deleted task; pages beyond the data; strict pagination parsing; partial status strings; empty store; re-completing a task; reassignment.
+- **Isolation:** the store is a module-level array, so every test calls the service's `_reset()` (a test-only helper, not reachable over HTTP) in `beforeEach` and seeds known data. No test depends on another or on run order.
+- **Process:** tests were written against the intended contract first; on the original starter code 57 of 126 tests failed, which produced the bug list.
 
-- **Unit tests: service** (`taskService.test.js`, 33 tests). Covers every service function: `getAll`, `findById`, `getByStatus`, `getPaginated`, `getStats`, `create`, `update`, `remove`, `completeTask`, `assignTask`. Tests call the service directly to check business rules such as page boundaries, overdue calculation (past-due tasks count; done or future tasks don't), defaults, and that unrelated fields are preserved.
-- **Unit tests: validators** (`validators.test.js`, 33 tests). Each validation rule, using parameterised cases for empty, whitespace, wrong-type, `null` and invalid-enum inputs.
-- **Integration tests** (`tasks.integration.test.js`, 56 tests). Every endpoint over real HTTP via Supertest, checking status codes, response bodies, the error shape, and side effects. For example, a rejected `POST` must not create anything, and a rejected `assign` must leave the task untouched.
-- **App tests** (`app.test.js`, 4 tests). `/health`, unknown routes, malformed JSON → 400, and an unexpected exception → 500 without leaking details. For the last one, a service method is mocked to throw.
+## Design Decisions
 
-**Edge cases covered** include missing, empty, whitespace-only and wrong-type fields; invalid enum values; non-object JSON bodies and malformed JSON; unknown ids; deleting twice; assigning a deleted task; pages beyond the data; zero, negative and non-numeric pagination; partial status strings; an empty data set; completing an already completed task; and reassignment.
+- **Kept the starter architecture** (routes → service → in-memory store, validators as pure functions). No new dependencies, frameworks or layers.
+- **Validation before lookup** for `PUT` and `assign`, so a bad body sent to an unknown id returns 400, not 404.
+- **Lenient pagination:** invalid `page`/`limit` fall back to defaults rather than returning 400, which keeps the starter's original intent (`|| 1`, `|| 10`).
+- **`PUT` ignores `id`/`createdAt`** instead of rejecting them, since clients often send whole objects back.
+- **Reassignment overwrites** the previous assignee; there is no "unassign" operation (empty values are rejected).
 
-**Test isolation.** The store is a module-level array shared by the app and the tests. Every suite calls the service's existing `_reset()` in `beforeEach` and seeds known tasks, so no test depends on another test's `POST`/`PUT`/`DELETE` or on run order. No new reset mechanism was needed.
+## Questions Before Production
 
-**Process.** I wrote the tests against the intended contract *before* changing any code. On the original code, 57 of 126 tests failed. That list drove the bug report, and I then made fixes until the suite passed.
+Not bugs; the brief doesn't define the behavior, so I did not guess (details in [BUGS.md](./BUGS.md)):
 
-## Deployment
-
-The app needs no database or build step, and it's ready to run on any Node host (Render, Railway, Fly.io, etc.):
-
-- Binds to `process.env.PORT || 3000` on `0.0.0.0`.
-- `GET /health` for platform health checks.
-- `"engines": { "node": ">=18" }` in `package.json`.
-
-Suggested platform settings:
-
-| Setting | Value |
-|---------|-------|
-| Root directory | `task-api` |
-| Build command | `npm ci` |
-| Start command | `npm start` |
-| Health check path | `/health` |
-
-Because storage is in memory, data is lost on every restart or redeploy and isn't shared between instances. Run a single instance.
+1. Should calling `PATCH /tasks/:id/complete` repeatedly preserve the original `completedAt` or refresh it?
+2. If `PUT /tasks/:id` changes `status` to `done`, should `completedAt` be set automatically (and cleared when reopened)?
+3. Is `PUT` a full replace or a partial merge? (Currently partial.)
+4. Is `assignee` free text or a reference to a user? Should assigning an already-assigned task require an explicit override?
+5. Should invalid pagination parameters return 400 instead of silently using defaults?
 
 ## Production Considerations
 
-These are **not** implemented. They're what I'd look at before real production use:
+**Implemented:** in-memory store, input validation, consistent error shape, `/health`, CI running tests and the coverage threshold, binding to `PORT` on `0.0.0.0`.
 
-- **Persistent, concurrency-safe storage** (e.g. PostgreSQL) instead of the in-memory array, so data survives restarts and multiple instances can run.
-- **Authentication and authorization**: who can create, delete or assign tasks, and whether `assignee` should reference a real user id rather than a free-text name.
-- **Schema-based validation** (e.g. zod/Joi) that also rejects unknown fields and applies length limits.
-- **Structured logging** and request IDs instead of `console.error`, plus **monitoring/alerting** on error rates.
-- **Rate limiting** and body-size limits.
-- **OpenAPI documentation** generated from, or checked against, the schema.
-- **CI/CD** running `npm run coverage` on every pull request.
-- **A total count in list responses** (or pagination metadata) so clients know how many pages exist.
+**Future work (not implemented):**
 
-## Reflection
+- Persistent, concurrency-safe storage (e.g. PostgreSQL); the in-memory store loses data on restart and can't be shared between instances.
+- Authentication and authorization.
+- Strict request schemas (reject unknown fields, length limits, strict ISO 8601 `dueDate`; currently `Date.parse` is used).
+- Structured logging and monitoring/alerting.
+- Rate limiting and body-size limits.
+- OpenAPI documentation.
+- Pagination metadata (total count) in list responses.
 
-**What I'd test next.** I'd add property-based tests for pagination (every task appears on exactly one page for any `limit`). I'd test concurrent requests once there's a real datastore, and `dueDate` edge cases around time zones and "due today". I'd also add contract tests generated from an OpenAPI spec.
+## Deployment
 
-**What surprised me.**
-- `completeTask` silently resetting priority. It looks like a copy/paste from `create()` and is easy to miss without a test that compares the whole object.
-- The starter README documented statuses (`pending | in-progress | completed`) that the code rejects.
-- `PUT` is described as a full update but behaves as a partial merge, which also allowed the id overwrite.
-- `?status=` and pagination couldn't be combined, even though the README's own example combines them.
+The API needs no database or build step. It listens on `process.env.PORT || 3000` on `0.0.0.0` and exposes `GET /health`. **It has not been deployed yet**; no live URL exists.
 
-**Questions before shipping to production.**
-- Should `PUT` be a true full replace or stay a partial merge? If partial, should it be `PATCH`?
-- Should `completedAt` follow status changes made via `PUT` (bug #9)? Should re-completing keep the original timestamp (bug #10)?
-- Is `assignee` a free-text name or a reference to a user? Should assigning an already-assigned task require an explicit override?
-- Should invalid pagination parameters return 400 instead of silently using the defaults?
-- What are the persistence, retention and multi-instance requirements?
+To deploy on [Render](https://render.com) (free tier):
+
+1. Sign in to Render with GitHub → **New → Blueprint** → select this repository (it reads [render.yaml](./render.yaml)), **or** create a **Web Service** manually with:
+
+   | Setting | Value |
+   |---------|-------|
+   | Root directory | `task-api` |
+   | Build command | `npm ci` |
+   | Start command | `npm start` |
+   | Health check path | `/health` |
+
+2. Once live, verify: `curl https://<your-service>.onrender.com/health` → `{"status":"ok"}`.
+3. Put the URL in the [Submission Links](#submission-links) section above.
+
+Storage is in memory, so run a single instance; data is lost on restart or redeploy (free-tier services also sleep when idle, so the first request may be slow).
