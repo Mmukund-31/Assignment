@@ -5,6 +5,11 @@ const app = express();
 
 app.use(express.json());
 
+// Landing response so opening the bare deployment URL in a browser isn't a 404.
+app.get('/', (req, res) => {
+  res.json({ name: 'Task API', health: '/health', tasks: '/tasks', stats: '/tasks/stats' });
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });

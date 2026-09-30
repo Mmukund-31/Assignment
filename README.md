@@ -93,6 +93,7 @@ All errors use `{ "error": "<message>" }`.
 
 | Method | Path | Purpose | Success | Errors |
 |--------|------|---------|---------|--------|
+| `GET` | `/` | Landing response listing the main endpoints | 200 | |
 | `GET` | `/health` | Liveness check → `{ "status": "ok" }` | 200 | |
 | `GET` | `/tasks` | List tasks. Query: `status`, `page`, `limit` (combinable) | 200 (array) | |
 | `GET` | `/tasks/stats` | `{ todo, in_progress, done, overdue }` | 200 | |
