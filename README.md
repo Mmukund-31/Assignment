@@ -5,8 +5,10 @@ An Express REST API for managing tasks (in-memory store), with a full Jest/Super
 ## Submission Links
 
 - **GitHub:** https://github.com/Mmukund-31/Assignment
-- **Live API:** _pending: not deployed yet (see [Deployment](#deployment))_
-- **Health Check:** _pending: `<live-url>/health` once deployed_
+- **Live API:** https://assignment-pr6e.onrender.com
+- **Health Check:** https://assignment-pr6e.onrender.com/health
+
+> The live API runs on Render's free tier, which sleeps after ~15 minutes idle, so the first request can take 30–60 seconds. Data is in memory and resets on restart.
 
 ## Overview
 
@@ -209,9 +211,9 @@ Not bugs; the brief doesn't define the behavior, so I did not guess (details in 
 
 ## Deployment
 
-The API needs no database or build step. It listens on `process.env.PORT || 3000` on `0.0.0.0` and exposes `GET /health`. **It has not been deployed yet**; no live URL exists.
+The API needs no database or build step. It listens on `process.env.PORT || 3000` on `0.0.0.0` and exposes `GET /health`. It is deployed on [Render](https://render.com) (free tier) at https://assignment-pr6e.onrender.com.
 
-To deploy on [Render](https://render.com) (free tier):
+To deploy your own copy on Render:
 
 1. Sign in to Render with GitHub → **New → Blueprint** → select this repository (it reads [render.yaml](./render.yaml)), **or** create a **Web Service** manually with:
 
@@ -222,7 +224,6 @@ To deploy on [Render](https://render.com) (free tier):
    | Start command | `npm start` |
    | Health check path | `/health` |
 
-2. Once live, verify: `curl https://<your-service>.onrender.com/health` → `{"status":"ok"}`.
-3. Put the URL in the [Submission Links](#submission-links) section above.
+2. Once live, verify: `curl https://assignment-pr6e.onrender.com/health` → `{"status":"ok"}` (use your own service URL for your own copy).
 
 Storage is in memory, so run a single instance; data is lost on restart or redeploy (free-tier services also sleep when idle, so the first request may be slow).

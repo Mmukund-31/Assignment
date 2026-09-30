@@ -10,7 +10,14 @@ describe('GET /', () => {
   it('returns a landing response pointing at the main endpoints', async () => {
     const res = await request(app).get('/');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ name: 'Task API', health: '/health', tasks: '/tasks' });
+    expect(res.body).toMatchObject({
+      name: 'Task API',
+      status: 'ok',
+      version: expect.any(String),
+      health: '/health',
+      tasks: '/tasks',
+    });
+    expect(res.body.endpoints).toContain('PATCH /tasks/:id/assign');
   });
 });
 
